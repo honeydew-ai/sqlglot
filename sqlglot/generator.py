@@ -864,6 +864,9 @@ class Generator:
     # Keywords that can't be used as unquoted identifier names
     RESERVED_KEYWORDS: t.ClassVar[set[str]] = set()
 
+    # Keywords that can't be used as unquoted table names or aliases, e.g. FROM t AS join
+    RESERVED_TABLE_KEYWORDS: t.ClassVar[set[str]] = set()
+
     # Exprs whose comments are separated from them for better formatting
     WITH_SEPARATED_COMMENTS: t.ClassVar[tuple[type[exp.Expr], ...]] = (
         exp.Command,
@@ -2186,6 +2189,11 @@ class Generator:
             quoted
             or self.dialect.can_quote(expression, self.identify)
             or lower in self.RESERVED_KEYWORDS
+            or (
+                lower in self.RESERVED_TABLE_KEYWORDS
+                and expression.arg_key == "this"
+                and isinstance(expression.parent, (exp.Table, exp.TableAlias))
+            )
             or (not self.dialect.IDENTIFIERS_CAN_START_WITH_DIGIT and text[:1].isdigit())
         ):
             text = (

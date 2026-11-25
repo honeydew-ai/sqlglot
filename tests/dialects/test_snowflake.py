@@ -14,6 +14,37 @@ class TestSnowflake(Validator):
     maxDiff = None
     dialect = "snowflake"
 
+    def test_reserved_keywords(self):
+        # Unquoted, these fail to parse or, for current_date and true, read the
+        # function's or literal's value instead of the column
+        for keyword in ("select", "qualify", "current_date", "case", "true", "try_cast"):
+            with self.subTest(keyword=keyword):
+                self.assertEqual(exp.column(keyword).sql("snowflake"), f'"{keyword}"')
+
+        # These are reserved only as table names or aliases, CTE names included
+        for keyword in ("cross", "join", "left", "using"):
+            with self.subTest(keyword=keyword):
+                query = (
+                    exp.select(
+                        exp.column("c", table=exp.to_identifier(keyword)).as_(
+                            exp.to_identifier(keyword)
+                        )
+                    )
+                    .from_(
+                        exp.alias_(
+                            exp.Table(this=exp.to_identifier(keyword)),
+                            exp.to_identifier(keyword),
+                            table=True,
+                        )
+                    )
+                    .with_(exp.TableAlias(this=exp.to_identifier(keyword)), as_="SELECT 1 AS c")
+                )
+                self.assertEqual(
+                    query.sql("snowflake"),
+                    f'WITH "{keyword}" AS (SELECT 1 AS c) '
+                    f'SELECT {keyword}.c AS {keyword} FROM "{keyword}" AS "{keyword}"',
+                )
+
     def test_asof_join(self):
         for op in (">", ">=", "<", "<="):
             with self.subTest(op=op):
@@ -1065,7 +1096,7 @@ class TestSnowflake(Validator):
             "SELECT AI_CLASSIFY('text', ['travel', 'cooking'], OBJECT_CONSTRUCT('output_mode', 'multi'))"
         )
         self.validate_identity(
-            "SELECT * FROM table AT (TIMESTAMP => '2024-07-24') UNPIVOT(a FOR b IN (c)) AS pivot_table"
+            "SELECT * FROM \"table\" AT (TIMESTAMP => '2024-07-24') UNPIVOT(a FOR b IN (c)) AS pivot_table"
         )
         self.validate_identity(
             "SELECT * FROM quarterly_sales PIVOT(SUM(amount) FOR quarter IN ('2023_Q1', '2023_Q2', '2023_Q3', '2023_Q4', '2024_Q1') DEFAULT ON NULL (0)) ORDER BY empid"
@@ -5440,28 +5471,28 @@ FROM persons AS p, LATERAL FLATTEN(input => p.c, path => 'contact') AS _flattene
         self.validate_all(
             "DESCRIBE TABLE db.table",
             write={
-                "snowflake": "DESCRIBE TABLE db.table",
+                "snowflake": 'DESCRIBE TABLE db."table"',
                 "spark": "DESCRIBE db.table",
             },
         )
         self.validate_all(
             "DESCRIBE db.table",
             write={
-                "snowflake": "DESCRIBE TABLE db.table",
+                "snowflake": 'DESCRIBE TABLE db."table"',
                 "spark": "DESCRIBE db.table",
             },
         )
         self.validate_all(
             "DESC TABLE db.table",
             write={
-                "snowflake": "DESCRIBE TABLE db.table",
+                "snowflake": 'DESCRIBE TABLE db."table"',
                 "spark": "DESCRIBE db.table",
             },
         )
         self.validate_all(
             "DESC VIEW db.table",
             write={
-                "snowflake": "DESCRIBE VIEW db.table",
+                "snowflake": 'DESCRIBE VIEW db."table"',
                 "spark": "DESCRIBE db.table",
             },
         )
@@ -5541,7 +5572,7 @@ FROM persons AS p, LATERAL FLATTEN(input => p.c, path => 'contact') AS _flattene
                 "bigquery": "REGEXP_EXTRACT(subject, pattern, pos, occ)",
                 "hive": "REGEXP_EXTRACT(subject, pattern, group)",
                 "presto": 'REGEXP_EXTRACT(subject, pattern, "group")',
-                "snowflake": "REGEXP_SUBSTR(subject, pattern, pos, occ, params, group)",
+                "snowflake": 'REGEXP_SUBSTR(subject, pattern, pos, occ, params, "group")',
                 "spark": "REGEXP_EXTRACT(subject, pattern, group)",
             },
         )
@@ -5572,17 +5603,17 @@ FROM persons AS p, LATERAL FLATTEN(input => p.c, path => 'contact') AS _flattene
             },
         )
         self.validate_all(
-            "REGEXP_SUBSTR(subject, pattern, 1, 1, 'c', group)",
+            "REGEXP_SUBSTR(subject, pattern, 1, 1, 'c', \"group\")",
             read={
                 "duckdb": "REGEXP_EXTRACT(subject, pattern, group)",
                 "hive": "REGEXP_EXTRACT(subject, pattern, group)",
                 "presto": "REGEXP_EXTRACT(subject, pattern, group)",
-                "snowflake": "REGEXP_SUBSTR(subject, pattern, 1, 1, 'c', group)",
+                "snowflake": "REGEXP_SUBSTR(subject, pattern, 1, 1, 'c', \"group\")",
                 "spark": "REGEXP_EXTRACT(subject, pattern, group)",
             },
         )
 
-        self.validate_identity("REGEXP_SUBSTR_ALL(subject, pattern, pos, occ, param, group)")
+        self.validate_identity('REGEXP_SUBSTR_ALL(subject, pattern, pos, occ, param, "group")')
 
         # DuckDB transpilation tests for REGEXP_SUBSTR
         # DuckDB's default (no group) is semantically equivalent to group=0
@@ -6373,7 +6404,7 @@ CREDENTIALS = () WITH (
   SINGLE TRUE
 )""",
                 "snowflake": """COPY INTO 's3://example/data.csv'
-FROM EXTRA.EXAMPLE.TABLE
+FROM EXTRA.EXAMPLE."TABLE"
 CREDENTIALS = ()
 FILE_FORMAT = (TYPE=CSV COMPRESSION=NONE NULL_IF=(
   ''
@@ -6395,7 +6426,7 @@ SINGLE = TRUE""",
             """,
             write={
                 "": """COPY INTO 's3://example/data.csv' FROM EXTRA.EXAMPLE.TABLE STORAGE_INTEGRATION = S3_INTEGRATION WITH (FILE_FORMAT = (TYPE=CSV COMPRESSION=NONE NULL_IF=('') FIELD_OPTIONALLY_ENCLOSED_BY='"'), HEADER TRUE, OVERWRITE TRUE, SINGLE TRUE)""",
-                "snowflake": """COPY INTO 's3://example/data.csv' FROM EXTRA.EXAMPLE.TABLE STORAGE_INTEGRATION = S3_INTEGRATION FILE_FORMAT = (TYPE=CSV COMPRESSION=NONE NULL_IF=('') FIELD_OPTIONALLY_ENCLOSED_BY='"') HEADER = TRUE OVERWRITE = TRUE SINGLE = TRUE""",
+                "snowflake": """COPY INTO 's3://example/data.csv' FROM EXTRA.EXAMPLE."TABLE" STORAGE_INTEGRATION = S3_INTEGRATION FILE_FORMAT = (TYPE=CSV COMPRESSION=NONE NULL_IF=('') FIELD_OPTIONALLY_ENCLOSED_BY='"') HEADER = TRUE OVERWRITE = TRUE SINGLE = TRUE""",
             },
         )
 
