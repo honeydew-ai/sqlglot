@@ -1359,10 +1359,15 @@ class TestParser(unittest.TestCase):
             "duckdb",
             "postgres",
             "redshift",
-            "snowflake",
         ):
             with self.subTest(dialect):
                 self.assertEqual(parse_one(sql, dialect=dialect).sql(dialect=dialect), sql)
+
+        # Snowflake reserves VALUES, so it parses unquoted but must be generated quoted
+        self.assertEqual(
+            parse_one(sql, dialect="snowflake").sql(dialect="snowflake"),
+            'SELECT "values" FROM t WHERE "values" + 1 > x',
+        )
 
     def test_alter_set(self):
         sqls = [
