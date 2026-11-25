@@ -6,6 +6,22 @@ from tests.dialects.test_dialect import Validator
 class TestDatabricks(Validator):
     dialect = "databricks"
 
+    def test_reserved_keywords(self):
+        # Unquoted, these read the keyword's value instead of the column
+        for keyword in ("default", "false", "null", "true"):
+            with self.subTest(keyword=keyword):
+                self.assertEqual(exp.column(keyword).sql("databricks"), f"`{keyword}`")
+
+        # These are reserved only as table aliases
+        for keyword in ("anti", "join", "left", "mask", "semi"):
+            with self.subTest(keyword=keyword):
+                query = exp.select(exp.column("c", table=exp.to_identifier(keyword))).from_(
+                    exp.alias_(exp.to_table("t"), exp.to_identifier(keyword), table=True)
+                )
+                self.assertEqual(
+                    query.sql("databricks"), f"SELECT {keyword}.c FROM t AS `{keyword}`"
+                )
+
     def test_unnest(self):
         self.validate_all(
             "SELECT b.name, t.id FROM a CROSS JOIN LATERAL EXPLODE(a.ids) AS t(id) "

@@ -20,6 +20,30 @@ TIMESTAMP_TYPES = {
 
 
 class DatabricksGenerator(SparkGenerator):
+    # https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-reserved-words
+    # Databricks reads these as keywords in expressions, before any column of the same name
+    RESERVED_KEYWORDS = {"default", "false", "null", "true"}
+    # Databricks restricts these only as table aliases; quoting a table name is harmless
+    RESERVED_TABLE_KEYWORDS = {
+        "anti",
+        "cross",
+        "except",
+        "full",
+        "inner",
+        "intersect",
+        "join",
+        "lateral",
+        "left",
+        "mask",
+        "minus",
+        "natural",
+        "on",
+        "right",
+        "semi",
+        "union",
+        "using",
+    }
+
     TABLESAMPLE_SEED_KEYWORD = "REPEATABLE"
     COPY_PARAMS_ARE_WRAPPED = False
     COPY_PARAMS_EQ_REQUIRED = True
