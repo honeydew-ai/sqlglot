@@ -18,6 +18,40 @@ class TestTrino(Validator):
             },
         )
 
+    def test_reserved_keywords(self):
+        # Unquoted, these fail to parse or, for niladic functions like current_date,
+        # read the function's value instead of the column
+        for keyword in (
+            "cube",
+            "current_catalog",
+            "current_date",
+            "current_path",
+            "current_role",
+            "current_user",
+            "grouping",
+            "json_array",
+            "json_exists",
+            "json_object",
+            "json_query",
+            "json_table",
+            "json_value",
+            "listagg",
+            "localtime",
+            "localtimestamp",
+            "normalize",
+            "recursive",
+            "rollup",
+            "skip",
+            "trim",
+            "uescape",
+            "unnest",
+        ):
+            with self.subTest(keyword=keyword):
+                self.assertEqual(exp.column(keyword).sql("trino"), f'"{keyword}"')
+
+        # EXECUTE isn't reserved in Trino
+        self.validate_identity("SELECT execute FROM (VALUES (42)) AS t(execute)")
+
     def test_execute_command_comments(self):
         statements = [
             "EXECUTE stmt USING 7 /* job; 42 */",
